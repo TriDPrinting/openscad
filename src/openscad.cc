@@ -93,15 +93,23 @@ static std::string arg_colorscheme;
 #define QUOTE(x__) # x__
 #define QUOTED(x__) QUOTE(x__)
 
-std::string versionnumber = QUOTED(OPENSCAD_VERSION);
+std::string openscad_shortversionnumber = QUOTED(OPENSCAD_SHORTVERSION);
+std::string openscad_versionnumber = QUOTED(OPENSCAD_VERSION);
 
-std::string openscad_versionnumber = QUOTED(OPENSCAD_VERSION)
+std::string openscad_displayversionnumber = 
 #ifdef OPENSCAD_COMMIT
-	" (git " QUOTED(OPENSCAD_COMMIT) ")"
+  QUOTED(OPENSCAD_VERSION)
+  " (git " QUOTED(OPENSCAD_COMMIT) ")";
+#else
+  QUOTED(OPENSCAD_SHORTVERSION);
 #endif
-;
 
-std::string openscad_version = "OpenSCAD " + openscad_versionnumber;
+std::string openscad_detailedversionnumber =
+#ifdef OPENSCAD_COMMIT
+  openscad_displayversionnumber;
+#else
+  openscad_versionnumber;
+#endif
 
 class Echostream : public std::ofstream
 {
@@ -264,12 +272,10 @@ Camera get_camera(po::variables_map vm)
 	return camera;
 }
 
-#ifdef OPENSCAD_TESTING
-#undef OPENSCAD_QTGUI
-#else
-#define OPENSCAD_QTGUI 1
+#ifndef OPENSCAD_NOGUI
 #include <QApplication>
 #include <QSettings>
+#define OPENSCAD_QTGUI 1
 #endif
 static bool checkAndExport(shared_ptr<const Geometry> root_geom, unsigned nd,
 	enum FileFormat format, const char *filename)
@@ -375,7 +381,7 @@ int cmdline(const char *deps_output_file, const std::string &filename, Camera &c
 	AbstractNode *absolute_root_node;
 	shared_ptr<const Geometry> root_geom;
 
-	handle_dep(filename.c_str());
+	handle_dep(filename);
 
 	std::ifstream ifs(filename.c_str());
 	if (!ifs.is_open()) {
@@ -646,6 +652,11 @@ int gui(vector<string> &inputFiles, const fs::path &original_path, int argc, cha
 #else
 	QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
 #endif
+#ifdef OPENSCAD_SNAPSHOT
+	app.setWindowIcon(QIcon(":/icons/openscad-nightly.png"));
+#else
+	app.setWindowIcon(QIcon(":/icons/openscad.png"));
+#endif
 	
 	// Other global settings
 	qRegisterMetaType<shared_ptr<const Geometry> >();
@@ -706,8 +717,15 @@ int gui(vector<string> &inputFiles, const fs::path &original_path, int argc, cha
 		LaunchingScreen *launcher = new LaunchingScreen();
 		int dialogResult = launcher->exec();
 		if (dialogResult == QDialog::Accepted) {
-			inputFiles.clear();
-			inputFiles.push_back(launcher->selectedFile().toStdString());
+			QStringList files = launcher->selectedFiles();
+			// If nothing is selected in the launching screen, leave
+			// the "" dummy in inputFiles to open an empty MainWindow.
+			if (!files.empty()) {
+				inputFiles.clear();
+				BOOST_FOREACH(const QString &f, files) {
+					inputFiles.push_back(f.toStdString());
+				}
+			}
 			delete launcher;
 		} else {
 			return 0;
@@ -780,6 +798,7 @@ int main(int argc, char **argv)
 		("projection", po::value<string>(), "(o)rtho or (p)erspective when exporting png")
 		("colorscheme", po::value<string>(), "colorscheme")
 		("debug", po::value<string>(), "special debug info")
+		("quiet,q", "quiet mode (don't print anything *except* errors)")
 		("o,o", po::value<string>(), "out-file")
 		("s,s", po::value<string>(), "stl-file")
 		("x,x", po::value<string>(), "dxf-file")
@@ -814,6 +833,9 @@ int main(int argc, char **argv)
 	if (vm.count("debug")) {
 		OpenSCAD::debug = vm["debug"].as<string>();
 		PRINTB("Debug on. --debug=%s",OpenSCAD::debug);
+	}
+	if (vm.count("quiet")) {
+		OpenSCAD::quiet = true;
 	}
 	if (vm.count("help")) help(argv[0]);
 	if (vm.count("version")) version();

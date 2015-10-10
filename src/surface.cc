@@ -220,7 +220,7 @@ Geometry *SurfaceNode::createGeometry() const
 	
 	int lines = 0;
 	int columns = 0;
-	double min_val = std::numeric_limits<double>::max();
+	double min_val = 0;
 	for (img_data_t::iterator it = data.begin();it != data.end();it++) {
 		lines = std::max(lines, (*it).first.first + 1);
 		columns = std::max(columns, (*it).first.second + 1);
@@ -311,10 +311,7 @@ std::string SurfaceNode::toString() const
 	stream << this->name() << "(file = " << this->filename
 		<< ", center = " << (this->center ? "true" : "false")
 		<< ", invert = " << (this->invert ? "true" : "false")
-#ifndef OPENSCAD_TESTING
-		// timestamp is needed for caching, but disturbs the test framework
 				 << ", " "timestamp = " << (fs::exists(path) ? fs::last_write_time(path) : 0)
-#endif
 				 << ")";
 
 	return stream.str();
